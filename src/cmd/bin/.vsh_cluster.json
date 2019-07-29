@@ -1,0 +1,17 @@
+
+{
+  "user": "perrynzhou",
+  "password": "zhoulina",
+  "port": 22,
+  "group": "groupa",
+  "tag": "linux",
+  "nodes": [
+   {
+    "ip": "192.168.26.128"
+   },
+   {
+
+    "ip": "10.211.55.4"
+   }
+  ]
+ }

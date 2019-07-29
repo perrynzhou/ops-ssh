@@ -1,0 +1,93 @@
+syntax = "proto3";
+package pb;
+
+// load from file
+message NodeMeta {
+    string   host=1;
+    int32    port=2;
+    string username=3;
+    string password=4;
+    string tag=5;
+    string name =6;
+    string group =7;
+}
+
+
+message UpdateRequest{
+    string  pub_name=1;
+    string  pub_username=2;
+    string  pub_pwd=3;
+    int32   pub_port =4;
+    string  pub_group_=5;
+    string pub_tag=6;
+    string  authority_user =7;
+    repeated NodeMeta node_metas=8;
+}
+
+message Response {
+    string  addr=1;
+    string  msg=2;
+    string  group=3;
+}
+message DeleteRequest  {
+    repeated string groups =1;
+    string  username =2;
+}
+message DeleteResponse {
+    repeated  Response response=1;
+
+}
+message  UpdateResponse {
+    repeated Response response=1;
+}
+message CacheRequest {
+    string username = 1;
+    int32  flag =2;
+}
+message CacheResponse {
+    int32 response =1;
+}
+message QueryRequest{
+    repeated string  group_names=1;
+    string  username =2;
+}
+message QueryResponse {
+    map<string,int32> group_metas=1;  //key is group,value is node size
+    repeated NodeMeta node_metas=2;
+}
+message DecodeRequest {
+    string username = 1;
+}
+message DecodeResponse {
+    int32  response=1;
+    string message=2;
+}
+message DumpRequest {
+    string username = 1;
+}
+message DumpResponse {
+    int32  response=1;
+    string message=2;
+}
+message BasicRequest {
+    string username=1;
+}
+message BasicResponse {
+    int32 response=1;
+}
+message UserRequest {
+    string username=1;
+}
+message UserResponse {
+    map<string,bool> response=1;
+}
+service  ServerNodeService {
+    rpc Load(UpdateRequest)  returns (UpdateResponse) {};
+    rpc Query(QueryRequest)  returns (QueryResponse) {};
+    rpc Delete(DeleteRequest)  returns (DeleteResponse) {};
+    rpc Decode(DecodeRequest)  returns (DecodeResponse) {};
+    rpc Dump(DumpRequest)  returns (DumpResponse) {};
+    rpc Cache(CacheRequest) returns (CacheResponse){};
+    rpc Access(BasicRequest) returns (BasicResponse) {};
+    rpc User(UserRequest) returns (UserResponse) {};
+}
