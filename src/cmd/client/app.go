@@ -220,19 +220,6 @@ func cmdHanleOneParameter(names []string) {
 			}
 			fmt.Println("template exists in ", defaultTemplateFile)
 			break
-		case "decode":
-			cli, err := initConn(defaultClusterServerConfigFile)
-			if err != nil {
-				fmt.Println("init conn:", err)
-				return
-			}
-			resp, err := cli.NewDecodeSession()
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-			fmt.Println(resp.Message)
-			break
 		case "dump":
 			cli, err := initConn(defaultClusterServerConfigFile)
 			if err != nil {
