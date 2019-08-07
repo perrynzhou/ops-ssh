@@ -35,16 +35,13 @@ message DeleteRequest  {
 }
 message DeleteResponse {
     repeated  Response response=1;
-    int32 flag=2; //is update local cache
 
 }
 message  UpdateResponse {
     repeated Response response=1;
-    int32 flag=2;
 }
 message CacheRequest {
     string username = 1;
-    int32  flag =2;
 }
 message CacheResponse {
     int32 response =1;
@@ -56,7 +53,6 @@ message QueryRequest{
 message QueryResponse {
     map<string,int32> group_metas=1;  //key is group,value is node size
     repeated NodeMeta node_metas=2;
-    int32 flag=3;
 }
 message DumpRequest {
     string username = 1;

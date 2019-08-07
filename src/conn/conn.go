@@ -62,6 +62,7 @@ func (a *Conn) NewDumpSession() (*pb.DumpResponse, error) {
 
 	return c.Dump(context.Background(), req)
 }
+
 func (a *Conn) NewUserSession() (*pb.UserResponse, error) {
 	username, err := utils.GetUserName()
 	if err != nil {

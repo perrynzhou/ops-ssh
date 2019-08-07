@@ -25,7 +25,8 @@ import (
 
 const (
 	defauleDumpFile             = "cluster_dump.json"
-	defaultAuthorityConfigFile = "template_authority_config.json"
+	DefaultAuthorityConfigFile = "template_config.json"
+	defauleCount = 4
 )
 
 const (
@@ -213,8 +214,8 @@ func (s *Server) reloadAuthorityConfig(done chan struct{}) {
 	<-done
 }
 func (s *Server) CreateTemplateAuthorityConfig() error {
-	if _, err := os.Stat(defaultAuthorityConfigFile); os.IsExist(err) {
-		if err = os.Remove(defaultAuthorityConfigFile); err != nil {
+	if _, err := os.Stat(DefaultAuthorityConfigFile); os.IsExist(err) {
+		if err = os.Remove(DefaultAuthorityConfigFile); err != nil {
 			return err
 		}
 	}
@@ -222,12 +223,11 @@ func (s *Server) CreateTemplateAuthorityConfig() error {
 		PublicAddress: []string{"127.0.0.1", "127.0.0.2"},
 		UserRefNodes:  make([]UserRefNode, 0),
 	}
-	count := 2
 	uname, err := utils.GetUserName()
 	if err != nil {
 		return err
 	}
-	for i := 0; i < count; i++ {
+	for i := 0; i < defauleCount; i++ {
 
 		userRefNode := UserRefNode{
 			Name:    uname,
@@ -235,7 +235,7 @@ func (s *Server) CreateTemplateAuthorityConfig() error {
 			Address: make([]string, 0),
 		}
 
-		for j := 0; j < count; j++ {
+		for j := 0; j < defauleCount; j++ {
 			ip := fmt.Sprintf("127.0.0.%d", j+1)
 			userRefNode.Address = append(userRefNode.Address, ip)
 		}
@@ -245,7 +245,7 @@ func (s *Server) CreateTemplateAuthorityConfig() error {
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(defaultAuthorityConfigFile, bin, os.ModePerm)
+	return ioutil.WriteFile(DefaultAuthorityConfigFile, bin, os.ModePerm)
 
 }
 func (s *Server) checkAccessPermission(Name string) bool {
@@ -444,7 +444,6 @@ func (s *Server) Delete(ctx context.Context, in *pb.DeleteRequest) (*pb.DeleteRe
 		delete(group.Ref, groupName)
 	}
 	if count > 0 {
-		deleteResp.Flag=int32(1)
 		for _, userInfo := range s.userPrivilege {
 			userInfo.IsNeedUpateCache = true
 		}
@@ -553,7 +552,6 @@ func (s *Server) Query(ctx context.Context, in *pb.QueryRequest) (*pb.QueryRespo
 	}
 	if s.userPrivilege[in.Username].IsNeedUpateCache {
 		s.userPrivilege[in.Username].IsNeedUpateCache = false
-		res.Flag = int32(1)
 	}
 	return res, nil
 
