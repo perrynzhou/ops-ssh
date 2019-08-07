@@ -248,12 +248,12 @@ func (s *Server) CreateTemplateAuthorityConfig() error {
 	return ioutil.WriteFile(DefaultAuthorityConfigFile, bin, os.ModePerm)
 
 }
-func (s *Server) checkAccessPermission(Name string) bool {
+func (s *Server) checkAccessPermission(Name string) (bool,int) {
 	defer log.Info("checkAccessPermission:", Name, ",userinfo:", s.userPrivilege[Name])
 	if _, ok := s.userPrivilege[Name]; !ok {
-		return false
+		return false,-1
 	}
-	return true
+	return true,s.userPrivilege[Name].Type
 }
 func (s *Server) checkSuperPermission(Name string) bool {
 	defer log.Info("checkSuperPermission:", Name, ",userinfo:", s.userPrivilege[Name])
@@ -266,7 +266,8 @@ func (s *Server) checkSuperPermission(Name string) bool {
 	return true
 }
 func (s *Server) User(ctx context.Context, in *pb.UserRequest) (*pb.UserResponse, error) {
-	for !s.checkAccessPermission(in.Username) {
+	b,_ :=s.checkAccessPermission(in.Username)
+	for !b {
 		return nil, errors.New("Permission denied")
 	}
 	s.mutex.Lock()
@@ -307,8 +308,8 @@ func (s *Server) Load(ctx context.Context, in *pb.UpdateRequest) (*pb.UpdateResp
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	var err error
-
-	if !s.checkAccessPermission(in.AuthorityUser) {
+	b,_ :=s.checkAccessPermission(in.AuthorityUser)
+	if !b {
 		return nil, errors.New("Permission denied")
 	}
 	nodes := utils.NewUpdateRequest(in)
@@ -452,10 +453,13 @@ func (s *Server) Delete(ctx context.Context, in *pb.DeleteRequest) (*pb.DeleteRe
 }
 
 func (s *Server) Access(ctx context.Context, in *pb.BasicRequest) (*pb.BasicResponse, error) {
-	if !s.checkAccessPermission(in.Username) {
+	b,utype := s.checkAccessPermission(in.Username)
+	if !b {
 		return nil, errors.New("Permission denied")
 	}
-	return &pb.BasicResponse{}, nil
+	return &pb.BasicResponse{
+		Response:int32(utype),
+	}, nil
 
 }
 
