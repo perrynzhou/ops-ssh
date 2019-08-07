@@ -179,11 +179,6 @@ func cmdHanleOneParameter(names []string) {
 			}
 			break
 		case "host":
-			_, err = cli.NewBasicSession()
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
 			cache, err := fetchCache(nil)
 			if err != nil {
 				fmt.Println("go host:", err)
@@ -200,12 +195,6 @@ func cmdHanleOneParameter(names []string) {
 			}
 			break
 		case "template":
-			_, err = cli.NewBasicSession()
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-			defer cli.Close()
 			if _, err := os.Stat(defaultClusterTemplateFile); os.IsNotExist(err) {
 				utils.CreateTemplate(defaultClusterTemplateFile)
 				fmt.Println("create template success")

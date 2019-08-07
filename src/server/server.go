@@ -464,7 +464,8 @@ func (s *Server) Access(ctx context.Context, in *pb.BasicRequest) (*pb.BasicResp
 }
 
 func (s *Server) Cache(ctx context.Context, in *pb.CacheRequest) (*pb.CacheResponse, error) {
-	if !s.checkAccessPermission(in.Username) {
+	b,_ := s.checkAccessPermission(in.Username)
+	if !b {
 		return nil, errors.New("Permission denied")
 	}
 	resp := &pb.CacheResponse{
