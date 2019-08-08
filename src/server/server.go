@@ -24,9 +24,9 @@ import (
 )
 
 const (
-	defauleDumpFile             = "cluster_dump.json"
+	defauleDumpFile            = "cluster_dump.json"
 	DefaultAuthorityConfigFile = "template_config.json"
-	defauleCount = 4
+	defauleCount               = 4
 )
 
 const (
@@ -34,6 +34,7 @@ const (
 	SuperUserType
 	LimitUserType
 )
+
 type UserRefNode struct {
 	Name    string   `json:"uname"`
 	Type    int      `json:"type"`
@@ -210,7 +211,7 @@ func (s *Server) reloadAuthorityConfig(done chan struct{}) {
 		log.Error("watch.Add:", err)
 		return
 	}
-	fmt.Println(" wait to stop watch file")
+	log.Info(" wait to stop watch file：",s.authorityConfigPath)
 	<-done
 }
 func (s *Server) CreateTemplateAuthorityConfig() error {
@@ -248,12 +249,12 @@ func (s *Server) CreateTemplateAuthorityConfig() error {
 	return ioutil.WriteFile(DefaultAuthorityConfigFile, bin, os.ModePerm)
 
 }
-func (s *Server) checkAccessPermission(Name string) (bool,int) {
+func (s *Server) checkAccessPermission(Name string) (bool, int) {
 	defer log.Info("checkAccessPermission:", Name, ",userinfo:", s.userPrivilege[Name])
 	if _, ok := s.userPrivilege[Name]; !ok {
-		return false,-1
+		return false, -1
 	}
-	return true,s.userPrivilege[Name].Type
+	return true, s.userPrivilege[Name].Type
 }
 func (s *Server) checkSuperPermission(Name string) bool {
 	defer log.Info("checkSuperPermission:", Name, ",userinfo:", s.userPrivilege[Name])
@@ -266,21 +267,17 @@ func (s *Server) checkSuperPermission(Name string) bool {
 	return true
 }
 func (s *Server) User(ctx context.Context, in *pb.UserRequest) (*pb.UserResponse, error) {
-	b,_ :=s.checkAccessPermission(in.Username)
+	b, _ := s.checkAccessPermission(in.Username)
 	for !b {
 		return nil, errors.New("Permission denied")
 	}
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	resp := &pb.UserResponse{
-		Response: make(map[string]bool),
+		Response: make(map[string]int32),
 	}
 	for username, info := range s.userPrivilege {
-		if info.Type == 1 {
-			resp.Response[username] = true
-		} else {
-			resp.Response[username] = false
-		}
+			resp.Response[username] = int32(info.Type)
 	}
 	if len(resp.Response) == 0 {
 		return nil, errors.New("empty user")
@@ -308,7 +305,7 @@ func (s *Server) Load(ctx context.Context, in *pb.UpdateRequest) (*pb.UpdateResp
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	var err error
-	b,_ :=s.checkAccessPermission(in.AuthorityUser)
+	b, _ := s.checkAccessPermission(in.AuthorityUser)
 	if !b {
 		return nil, errors.New("Permission denied")
 	}
@@ -453,18 +450,18 @@ func (s *Server) Delete(ctx context.Context, in *pb.DeleteRequest) (*pb.DeleteRe
 }
 
 func (s *Server) Access(ctx context.Context, in *pb.BasicRequest) (*pb.BasicResponse, error) {
-	b,utype := s.checkAccessPermission(in.Username)
+	b, utype := s.checkAccessPermission(in.Username)
 	if !b {
 		return nil, errors.New("Permission denied")
 	}
 	return &pb.BasicResponse{
-		Response:int32(utype),
+		Response: int32(utype),
 	}, nil
 
 }
 
 func (s *Server) Cache(ctx context.Context, in *pb.CacheRequest) (*pb.CacheResponse, error) {
-	b,_ := s.checkAccessPermission(in.Username)
+	b, _ := s.checkAccessPermission(in.Username)
 	if !b {
 		return nil, errors.New("Permission denied")
 	}
@@ -478,7 +475,8 @@ func (s *Server) Cache(ctx context.Context, in *pb.CacheRequest) (*pb.CacheRespo
 }
 
 func (s *Server) Query(ctx context.Context, in *pb.QueryRequest) (*pb.QueryResponse, error) {
-	if !s.checkAccessPermission(in.Username) {
+	b, _ := s.checkAccessPermission(in.Username)
+	if !b {
 		return nil, errors.New("Permission denied")
 	}
 	groupInfo := meta.FetchGroup()

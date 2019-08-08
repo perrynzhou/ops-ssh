@@ -16,9 +16,9 @@ const (
 )
 
 var (
-	port            = flag.Int("port", 5566, "server running port")
-	authorityConfig = flag.String("config", "config.json", "user privileges config")
-	dumpMinute      = flag.Int("dump_minute", defaultTimeOutMinute, "time interval for dump cluster")
+	port            = flag.Int("p", 5566, "server running port")
+	authorityConfig = flag.String("c", "config.json", "user privileges config")
+	dumpMinute      = flag.Int("d", defaultTimeOutMinute, "time interval for dump cluster")
 )
 
 func genTempateConfig(s *server.Server, stop chan struct{}) {

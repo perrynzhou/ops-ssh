@@ -71,7 +71,7 @@ message UserRequest {
     string username=1;
 }
 message UserResponse {
-    map<string,bool> response=1;
+    map<string,int32> response=1;
 }
 service  ServerNodeService {
     rpc Load(UpdateRequest)  returns (UpdateResponse) {};
