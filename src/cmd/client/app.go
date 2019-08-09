@@ -124,96 +124,95 @@ func hanleOneCmd(names []string) {
 			cmdName = strings.ToLower(names[0])
 		}
 	}
-	if strings.Compare(cmdName, "dump") == 0 || strings.Compare(cmdName, "template") == 0 || strings.Compare(cmdName, "node") == 0 || strings.Compare(cmdName, "group") == 0 || strings.Compare(cmdName, "user") == 0 || strings.Compare(cmdName, "host") == 0 {
-		defer formatWriter.Flush()
-		cli, err := initConn(defaultClusterServerConfigFile)
-		if err != nil {
-			fmt.Println("init conn:", err)
+	defer formatWriter.Flush()
+	cli, err := initConn(defaultClusterServerConfigFile)
+	if err != nil {
+		fmt.Println("init conn:", err)
+		return
+	}
+	_, err = cli.NewBasicSession()
+	if err != nil {
+		fmt.Println(err)
+		os.Remove(defaultCacheClusterFile)
+		return
+	}
+	c, err := fetchCache(nil)
+	if err != nil {
+		fmt.Println("fetchCache :", err.Error())
+		return
+	}
+	switch cmdName {
+	case "node":
+		fmt.Fprintln(formatWriter, "host\ttag\tgroup")
+		if len(c.GroupRefNodes) == 0 {
+			fmt.Println("empty nodes")
 			return
 		}
-		_, err = cli.NewBasicSession()
+		nodes := c.OrderNode()
+		for _, node := range nodes {
+			fmt.Fprintf(formatWriter, "%s\t%s\t%s\n", node.Ip, node.Tag, node.GroupName)
+		}
+		return
+	case "group":
+		fmt.Fprintln(formatWriter, "nodes\tgroup")
+		if len(c.GroupCache) == 0 {
+			fmt.Println("enmpty group")
+			return
+		}
+
+		groupNames := c.OrderGroup()
+		for _, groupName := range groupNames {
+			fmt.Fprintf(formatWriter, "%d\t%s\n", c.GroupCache[groupName], groupName)
+		}
+		break
+	case "user":
+		resp, err := cli.NewUserSession()
 		if err != nil {
 			fmt.Println(err)
-			os.Remove(defaultCacheClusterFile)
 			return
 		}
-		c, err := fetchCache(nil)
+		fmt.Fprintln(formatWriter, "user\ttype")
+		for userName, userType := range resp.Response {
+			fmt.Fprintf(formatWriter, "%s\t%v\n", userName, userType)
+		}
+		break
+	case "host":
+		cache, err := fetchCache(nil)
 		if err != nil {
-			fmt.Println("fetchCache :", err.Error())
+			fmt.Println("go host:", err)
 			return
 		}
-		switch cmdName {
-		case "node":
-			fmt.Fprintln(formatWriter, "host\ttag\tgroup")
-			if len(c.GroupRefNodes) == 0 {
-				fmt.Println("empty nodes")
-				return
-			}
-			nodes := c.OrderNode()
-			for _, node := range nodes {
-				fmt.Fprintf(formatWriter, "%s\t%s\t%s\n", node.Ip, node.Tag, node.GroupName)
-			}
+		if _, ok := cache.NodeCache[ip]; !ok {
+			fmt.Println("unknown node:", ip)
 			return
-		case "group":
-			fmt.Fprintln(formatWriter, "nodes\tgroup")
-			if len(c.GroupCache) == 0 {
-				fmt.Println("enmpty group")
-				return
-			}
-
-			groupNames := c.OrderGroup()
-			for _, groupName := range groupNames {
-				fmt.Fprintf(formatWriter, "%d\t%s\n", c.GroupCache[groupName], groupName)
-			}
-
-			break
-		case "user":
-			resp, err := cli.NewUserSession()
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-			fmt.Fprintln(formatWriter, "user\ttype")
-			for userName, userType := range resp.Response {
-				fmt.Fprintf(formatWriter, "%s\t%v\n", userName, userType)
-			}
-			break
-		case "host":
-			cache, err := fetchCache(nil)
-			if err != nil {
-				fmt.Println("go host:", err)
-				return
-			}
-			if _, ok := cache.NodeCache[ip]; !ok {
-				fmt.Println("unknown node:", ip)
-				return
-			}
-			node := cache.NodeCache[ip]
-			if err = ssh.NewSSHConnection(node); err != nil {
-				fmt.Printf("connect %s:%d:%v\n", node.Ip, node.Port, err)
-				return
-			}
-			break
-		case "template":
-			if _, err := os.Stat(defaultClusterTemplateFile); os.IsNotExist(err) {
-				utils.CreateTemplate(defaultClusterTemplateFile)
-				fmt.Println("create template success")
-				return
-			}
-			fmt.Println("template exists in ", defaultClusterTemplateFile)
-			break
-		case "dump":
-			_, err = cli.NewDumpSession()
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-			fmt.Println("dump success on remote!")
-			break
 		}
-	} else {
+		node := cache.NodeCache[ip]
+		if err = ssh.NewSSHConnection(node); err != nil {
+			fmt.Printf("connect %s:%d:%v\n", node.Ip, node.Port, err)
+			return
+		}
+		break
+	case "template":
+		if _, err := os.Stat(defaultClusterTemplateFile); os.IsNotExist(err) {
+			utils.CreateTemplate(defaultClusterTemplateFile)
+			fmt.Println("create template success")
+			return
+		}
+		fmt.Println("template exists in ", defaultClusterTemplateFile)
+		break
+	case "dump":
+		_, err = cli.NewDumpSession()
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		fmt.Println("dump success on remote!")
+		break
+	default:
 		usage()
+		break
 	}
+
 }
 
 func hanleMultiCmd(args []string) {
@@ -222,99 +221,98 @@ func hanleMultiCmd(args []string) {
 		return
 	}
 	cmdName := strings.ToLower(args[0])
-	if strings.Compare(cmdName, "run") == 0 || strings.Compare(cmdName, "load") == 0 || strings.Compare(cmdName, "delete") == 0 {
-		cli, err := initConn(defaultClusterServerConfigFile)
-		if err != nil {
-			fmt.Println("init connection:", err)
-			return
-		}
-		_, err = cli.NewBasicSession()
-		if err != nil {
-			fmt.Println(err)
-			os.Remove(defaultCacheClusterFile)
-			return
-		}
-		if strings.Compare(cmdName, "load") == 0 || strings.Compare(cmdName, "delete") == 0 {
+	cli, err := initConn(defaultClusterServerConfigFile)
+	if err != nil {
+		fmt.Println("init connection:", err)
+		return
+	}
+	_, err = cli.NewBasicSession()
+	if err != nil {
+		fmt.Println(err)
+		os.Remove(defaultCacheClusterFile)
+		return
+	}
+	if strings.Compare(cmdName, "load") == 0 || strings.Compare(cmdName, "delete") == 0 {
 
-			cacheFile, err := utils.Expand(fmt.Sprintf("~/%s", defaultCacheClusterFile))
+		cacheFile, err := utils.Expand(fmt.Sprintf("~/%s", defaultCacheClusterFile))
+		if err != nil {
+			fmt.Println("expand home dir:", err)
+		}
+		if _, err := os.Stat(cacheFile); err == nil {
+			os.Remove(cacheFile)
+		}
+	}
+	switch cmdName {
+	case "run":
+		cmdSize := len(args) - 1
+		cmds := make([]string, cmdSize)
+		for i := 0; i < cmdSize; i++ {
+			cmds[i] = strings.ToLower(args[i+1])
+		}
+		c, err := fetchCache(nil)
+		if err != nil {
+			fmt.Println("fetchCache :", err.Error())
+			return
+		}
+		nodes := c.OrderNode()
+		exeCmd := strings.Join(cmds, " ")
+		for _, node := range nodes {
+			output, err := ssh.Run(node, exeCmd)
+			fmt.Printf("********************%s***************************\n", node.Ip)
+			fmt.Printf("%s $ %s\n", node.Ip, exeCmd)
 			if err != nil {
-				fmt.Println("expand home dir:", err)
-			}
-			if _, err := os.Stat(cacheFile); err == nil {
-				os.Remove(cacheFile)
+				fmt.Println(err)
+			} else {
+				fmt.Println(string(output))
 			}
 		}
-		switch cmdName {
-		case "run":
-			cmdSize := len(args) - 1
-			cmds := make([]string, cmdSize)
-			for i := 0; i < cmdSize; i++ {
-				cmds[i] = strings.ToLower(args[i+1])
-			}
-			c, err := fetchCache(nil)
-			if err != nil {
-				fmt.Println("fetchCache :", err.Error())
-				return
-			}
-			nodes := c.OrderNode()
-			exeCmd := strings.Join(cmds, " ")
-			for _, node := range nodes {
-				output, err := ssh.Run(node, exeCmd)
-				fmt.Printf("********************%s***************************\n", node.Ip)
-				fmt.Printf("%s $ %s\n", node.Ip,  exeCmd)
-				if err != nil {
-					fmt.Println(err)
-				} else {
-					fmt.Println(string(output))
-				}
-			}
-			break
-		case "load":
-			var resp *pb.UpdateResponse
-			if _, err := os.Stat(args[1]); os.IsNotExist(err) {
-				fmt.Println("load: ", args[1], " invalid")
-				return
-			}
-			if resp, err = cli.NewUpdateSession(args[1]); err != nil {
-				fmt.Println("new update session:", err)
-				return
-			}
-			fmt.Fprintln(formatWriter, "host\tgroup\tmessage")
-			if len(resp.Response) > 0 {
-				sort.Slice(resp.Response, func(i, j int) bool {
-					if strings.Compare(resp.Response[i].Addr, resp.Response[j].Addr) < 0 {
-						return true
-					}
-					return false
-				})
-			}
-			for _, res := range resp.Response {
-				fmt.Fprintf(formatWriter, "%s\t%s\t%s\n", res.Addr, res.Group, res.Msg)
-			}
-			formatWriter.Flush()
-			break
-		case "delete":
-			var resp *pb.DeleteResponse
-			if resp, err = cli.NewDeleteSession(args[1:]); err != nil {
-				fmt.Println("new update session:", err)
-				return
-			}
-			fmt.Fprintln(formatWriter, "host\tgroup\tmessage")
+		break
+	case "load":
+		var resp *pb.UpdateResponse
+		if _, err := os.Stat(args[1]); os.IsNotExist(err) {
+			fmt.Println("load: ", args[1], " invalid")
+			return
+		}
+		if resp, err = cli.NewUpdateSession(args[1]); err != nil {
+			fmt.Println("new update session:", err)
+			return
+		}
+		fmt.Fprintln(formatWriter, "host\tgroup\tmessage")
+		if len(resp.Response) > 0 {
 			sort.Slice(resp.Response, func(i, j int) bool {
 				if strings.Compare(resp.Response[i].Addr, resp.Response[j].Addr) < 0 {
 					return true
 				}
 				return false
-
 			})
-			for _, res := range resp.Response {
-				fmt.Fprintf(formatWriter, "%s\t%s\t%s\n", res.Addr, res.Group, res.Msg)
-			}
-			formatWriter.Flush()
-			break
 		}
-	} else {
+		for _, res := range resp.Response {
+			fmt.Fprintf(formatWriter, "%s\t%s\t%s\n", res.Addr, res.Group, res.Msg)
+		}
+		formatWriter.Flush()
+		break
+	case "delete":
+		var resp *pb.DeleteResponse
+		if resp, err = cli.NewDeleteSession(args[1:]); err != nil {
+			fmt.Println("new update session:", err)
+			return
+		}
+		fmt.Fprintln(formatWriter, "host\tgroup\tmessage")
+		sort.Slice(resp.Response, func(i, j int) bool {
+			if strings.Compare(resp.Response[i].Addr, resp.Response[j].Addr) < 0 {
+				return true
+			}
+			return false
+
+		})
+		for _, res := range resp.Response {
+			fmt.Fprintf(formatWriter, "%s\t%s\t%s\n", res.Addr, res.Group, res.Msg)
+		}
+		formatWriter.Flush()
+		break
+	default:
 		usage()
+		break
 	}
 }
 func main() {
@@ -323,9 +321,9 @@ func main() {
 	} else if len(os.Args) == 2 {
 		if strings.Compare(strings.ToLower(os.Args[1]), "-h") == 0 || strings.Compare(strings.ToLower(os.Args[1]), "--help") == 0 {
 			usage()
-			return
+		} else {
+			hanleOneCmd(os.Args[1:])
 		}
-		hanleOneCmd(os.Args[1:])
 	} else {
 		hanleMultiCmd(os.Args[1:])
 	}
