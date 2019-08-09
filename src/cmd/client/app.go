@@ -17,10 +17,9 @@ import (
 )
 
 const (
-	defaultTemplateFile            = "cluster_template.json"
+	defaultClusterTemplateFile     = "template_cluster.json"
 	defaultClusterServerConfigFile = ".vsh_config.json"
 	defaultCacheClusterFile        = ".vsh_cache.json"
-	defaultClusterFile             = "cluster.json"
 )
 
 type Config struct {
@@ -100,18 +99,18 @@ func initConn(path string) (*conn.Conn, error) {
 }
 func usage() {
 	fmt.Println("Usage:")
-	fmt.Println("vsh [group|user|ip|template|decode|dump|load|delete]")
+	fmt.Println("vsh [group|user|ip|template|dump|load|delete|{option_ip} run]")
 	fmt.Println("Available Commands:")
 	fmt.Println("user      list current users")
 	fmt.Println("group     list node group info")
-	fmt.Println("decode    decode cluster info")
 	fmt.Println("delete    delete nodes of group")
 	fmt.Println("dump      dump cluster info")
 	fmt.Println("load      load nodes")
+	fmt.Println("run       execute shell command")
 	fmt.Println("template  create  cluster.json")
 	fmt.Println("help      help for user")
 }
-func cmdHanleOneParameter(names []string) {
+func hanleOneCmd(names []string) {
 	var cmdName string
 	var ip string
 	if names == nil {
@@ -125,8 +124,19 @@ func cmdHanleOneParameter(names []string) {
 			cmdName = strings.ToLower(names[0])
 		}
 	}
-	if strings.Compare(cmdName, "dump") == 0 || strings.Compare(cmdName, "template") == 0 || strings.Compare(cmdName, "decode") == 0 || strings.Compare(cmdName, "node") == 0 || strings.Compare(cmdName, "group") == 0 || strings.Compare(cmdName, "user") == 0 || strings.Compare(cmdName, "host") == 0 {
+	if strings.Compare(cmdName, "dump") == 0 || strings.Compare(cmdName, "template") == 0 || strings.Compare(cmdName, "node") == 0 || strings.Compare(cmdName, "group") == 0 || strings.Compare(cmdName, "user") == 0 || strings.Compare(cmdName, "host") == 0 {
 		defer formatWriter.Flush()
+		cli, err := initConn(defaultClusterServerConfigFile)
+		if err != nil {
+			fmt.Println("init conn:", err)
+			return
+		}
+		_, err = cli.NewBasicSession()
+		if err != nil {
+			fmt.Println(err)
+			os.Remove(defaultCacheClusterFile)
+			return
+		}
 		c, err := fetchCache(nil)
 		if err != nil {
 			fmt.Println("fetchCache :", err.Error())
@@ -158,34 +168,17 @@ func cmdHanleOneParameter(names []string) {
 
 			break
 		case "user":
-			cli, err := initConn(defaultClusterServerConfigFile)
-			if err != nil {
-				fmt.Println("init conn:", err)
-				return
-			}
 			resp, err := cli.NewUserSession()
 			if err != nil {
 				fmt.Println(err)
 				return
 			}
-			fmt.Fprintln(formatWriter, "user\tis_superuser")
-			for userName, isSuperUser := range resp.Response {
-				fmt.Fprintf(formatWriter, "%s\t%v\n", userName, isSuperUser)
+			fmt.Fprintln(formatWriter, "user\ttype")
+			for userName, userType := range resp.Response {
+				fmt.Fprintf(formatWriter, "%s\t%v\n", userName, userType)
 			}
 			break
 		case "host":
-			cli, err := initConn(defaultClusterServerConfigFile)
-			if err != nil {
-				fmt.Println("init conn:", err)
-				return
-			}
-			defer cli.Close()
-			_, err = cli.NewBasicSession()
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-
 			cache, err := fetchCache(nil)
 			if err != nil {
 				fmt.Println("go host:", err)
@@ -202,43 +195,14 @@ func cmdHanleOneParameter(names []string) {
 			}
 			break
 		case "template":
-			cli, err := initConn(defaultClusterServerConfigFile)
-			if err != nil {
-				fmt.Println("init conn:", err)
-				return
-			}
-			_, err = cli.NewBasicSession()
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-			defer cli.Close()
-			if _, err := os.Stat(defaultTemplateFile); os.IsNotExist(err) {
-				utils.CreateTemplate(defaultTemplateFile)
+			if _, err := os.Stat(defaultClusterTemplateFile); os.IsNotExist(err) {
+				utils.CreateTemplate(defaultClusterTemplateFile)
 				fmt.Println("create template success")
 				return
 			}
-			fmt.Println("template exists in ", defaultTemplateFile)
-			break
-		case "decode":
-			cli, err := initConn(defaultClusterServerConfigFile)
-			if err != nil {
-				fmt.Println("init conn:", err)
-				return
-			}
-			resp, err := cli.NewDecodeSession()
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-			fmt.Println(resp.Message)
+			fmt.Println("template exists in ", defaultClusterTemplateFile)
 			break
 		case "dump":
-			cli, err := initConn(defaultClusterServerConfigFile)
-			if err != nil {
-				fmt.Println("init conn:", err)
-				return
-			}
 			_, err = cli.NewDumpSession()
 			if err != nil {
 				fmt.Println(err)
@@ -251,29 +215,62 @@ func cmdHanleOneParameter(names []string) {
 		usage()
 	}
 }
-func cmdHanleTwoParameter(args []string) {
-	if args == nil || len(args) != 2 {
+
+func hanleMultiCmd(args []string) {
+	if args == nil || len(args) <= 1 {
 		usage()
 		return
 	}
 	cmdName := strings.ToLower(args[0])
-	if strings.Compare(cmdName, "load") == 0 || strings.Compare(cmdName, "delete") == 0 {
+	if strings.Compare(cmdName, "run") == 0 || strings.Compare(cmdName, "load") == 0 || strings.Compare(cmdName, "delete") == 0 {
 		cli, err := initConn(defaultClusterServerConfigFile)
 		if err != nil {
 			fmt.Println("init connection:", err)
 			return
 		}
-		cacheFile, err := utils.Expand(fmt.Sprintf("~/%s", defaultCacheClusterFile))
+		_, err = cli.NewBasicSession()
 		if err != nil {
-			fmt.Println("expand home dir:", err)
+			fmt.Println(err)
+			os.Remove(defaultCacheClusterFile)
+			return
 		}
-		if _, err := os.Stat(cacheFile); err == nil {
-			os.Remove(cacheFile)
+		if strings.Compare(cmdName, "load") == 0 || strings.Compare(cmdName, "delete") == 0 {
+
+			cacheFile, err := utils.Expand(fmt.Sprintf("~/%s", defaultCacheClusterFile))
+			if err != nil {
+				fmt.Println("expand home dir:", err)
+			}
+			if _, err := os.Stat(cacheFile); err == nil {
+				os.Remove(cacheFile)
+			}
 		}
 		switch cmdName {
+		case "run":
+			cmdSize := len(args) - 1
+			cmds := make([]string, cmdSize)
+			for i := 0; i < cmdSize; i++ {
+				cmds[i] = strings.ToLower(args[i+1])
+			}
+			c, err := fetchCache(nil)
+			if err != nil {
+				fmt.Println("fetchCache :", err.Error())
+				return
+			}
+			nodes := c.OrderNode()
+			exeCmd := strings.Join(cmds, " ")
+			for _, node := range nodes {
+				output, err := ssh.Run(node, exeCmd)
+				fmt.Printf("********************%s***************************\n", node.Ip)
+				fmt.Printf("%s $ %s\n", node.Ip,  exeCmd)
+				if err != nil {
+					fmt.Println(err)
+				} else {
+					fmt.Println(string(output))
+				}
+			}
+			break
 		case "load":
 			var resp *pb.UpdateResponse
-
 			if _, err := os.Stat(args[1]); os.IsNotExist(err) {
 				fmt.Println("load: ", args[1], " invalid")
 				return
@@ -282,7 +279,6 @@ func cmdHanleTwoParameter(args []string) {
 				fmt.Println("new update session:", err)
 				return
 			}
-
 			fmt.Fprintln(formatWriter, "host\tgroup\tmessage")
 			if len(resp.Response) > 0 {
 				sort.Slice(resp.Response, func(i, j int) bool {
@@ -323,16 +319,14 @@ func cmdHanleTwoParameter(args []string) {
 }
 func main() {
 	if len(os.Args) == 1 {
-		cmdHanleOneParameter(nil)
+		hanleOneCmd(nil)
 	} else if len(os.Args) == 2 {
 		if strings.Compare(strings.ToLower(os.Args[1]), "-h") == 0 || strings.Compare(strings.ToLower(os.Args[1]), "--help") == 0 {
 			usage()
 			return
 		}
-		cmdHanleOneParameter(os.Args[1:])
-	} else if len(os.Args) == 3 {
-		cmdHanleTwoParameter(os.Args[1:])
+		hanleOneCmd(os.Args[1:])
 	} else {
-		usage()
+		hanleMultiCmd(os.Args[1:])
 	}
 }

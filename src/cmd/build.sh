@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-export GOPATH=~/Source/open-source/go/devops-foundation/ops-ssh
+export GOPATH=/home/perrynzhou/Source/perrynzhou/go/ops-ssh
 rm  -rf ./bin/vsh*
 rm  -rf ./bin/*.db
 rm -rf  ./bin/.vsh_cache.json

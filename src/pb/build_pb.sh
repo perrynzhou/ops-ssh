@@ -1,3 +1,3 @@
 #!/usr/bin/env bash
-export GOPATH=~/Source/perrynzhou/go/devops-foundation/ops-ssh
+export GOPATH=~/home/perrynzhou/Source/perrynzhou/go/ops-ssh
 protoc --go_out=plugins=grpc:. service.proto

@@ -2,7 +2,6 @@ package server
 
 import (
 	"db"
-	"encode"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -25,9 +24,15 @@ import (
 )
 
 const (
-	encodeDumpFile             = "cluster_dump.json"
-	decodeDumpFile             = "decode_cluster_dump.json"
-	defaultAuthorityConfigFile = "template_authority_config.json"
+	defauleDumpFile            = "cluster_dump.json"
+	DefaultAuthorityConfigFile = "template_config.json"
+	defauleCount               = 4
+)
+
+const (
+	NormalUserType = iota
+	SuperUserType
+	LimitUserType
 )
 
 type UserRefNode struct {
@@ -206,12 +211,12 @@ func (s *Server) reloadAuthorityConfig(done chan struct{}) {
 		log.Error("watch.Add:", err)
 		return
 	}
-	fmt.Println(" wait to stop watch file")
+	log.Info(" wait to stop watch file：",s.authorityConfigPath)
 	<-done
 }
 func (s *Server) CreateTemplateAuthorityConfig() error {
-	if _, err := os.Stat(defaultAuthorityConfigFile); os.IsExist(err) {
-		if err = os.Remove(defaultAuthorityConfigFile); err != nil {
+	if _, err := os.Stat(DefaultAuthorityConfigFile); os.IsExist(err) {
+		if err = os.Remove(DefaultAuthorityConfigFile); err != nil {
 			return err
 		}
 	}
@@ -219,12 +224,11 @@ func (s *Server) CreateTemplateAuthorityConfig() error {
 		PublicAddress: []string{"127.0.0.1", "127.0.0.2"},
 		UserRefNodes:  make([]UserRefNode, 0),
 	}
-	count := 2
 	uname, err := utils.GetUserName()
 	if err != nil {
 		return err
 	}
-	for i := 0; i < count; i++ {
+	for i := 0; i < defauleCount; i++ {
 
 		userRefNode := UserRefNode{
 			Name:    uname,
@@ -232,7 +236,7 @@ func (s *Server) CreateTemplateAuthorityConfig() error {
 			Address: make([]string, 0),
 		}
 
-		for j := 0; j < count; j++ {
+		for j := 0; j < defauleCount; j++ {
 			ip := fmt.Sprintf("127.0.0.%d", j+1)
 			userRefNode.Address = append(userRefNode.Address, ip)
 		}
@@ -242,30 +246,15 @@ func (s *Server) CreateTemplateAuthorityConfig() error {
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(defaultAuthorityConfigFile, bin, os.ModePerm)
+	return ioutil.WriteFile(DefaultAuthorityConfigFile, bin, os.ModePerm)
 
 }
-func (s *Server) decodeDump(encodePath, decodePath string) error {
-	b, err := ioutil.ReadFile(encodePath)
-	if err != nil {
-		return err
-	}
-
-	rb, err := encode.Decoding(b)
-	if err != nil {
-		return err
-	}
-	if err = ioutil.WriteFile(decodePath, rb, os.ModePerm); err != nil {
-		return err
-	}
-	return nil
-}
-func (s *Server) checkAccessPermission(Name string) bool {
+func (s *Server) checkAccessPermission(Name string) (bool, int) {
 	defer log.Info("checkAccessPermission:", Name, ",userinfo:", s.userPrivilege[Name])
 	if _, ok := s.userPrivilege[Name]; !ok {
-		return false
+		return false, -1
 	}
-	return true
+	return true, s.userPrivilege[Name].Type
 }
 func (s *Server) checkSuperPermission(Name string) bool {
 	defer log.Info("checkSuperPermission:", Name, ",userinfo:", s.userPrivilege[Name])
@@ -278,42 +267,22 @@ func (s *Server) checkSuperPermission(Name string) bool {
 	return true
 }
 func (s *Server) User(ctx context.Context, in *pb.UserRequest) (*pb.UserResponse, error) {
-	for !s.checkAccessPermission(in.Username) {
+	b, _ := s.checkAccessPermission(in.Username)
+	for !b {
 		return nil, errors.New("Permission denied")
 	}
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	resp := &pb.UserResponse{
-		Response: make(map[string]bool),
+		Response: make(map[string]int32),
 	}
 	for username, info := range s.userPrivilege {
-		if info.Type == 1 {
-			resp.Response[username] = true
-		} else {
-			resp.Response[username] = false
-
-		}
+			resp.Response[username] = int32(info.Type)
 	}
 	if len(resp.Response) == 0 {
 		return nil, errors.New("empty user")
 	}
 	return resp, nil
-}
-func (s *Server) Decode(ctx context.Context, in *pb.DecodeRequest) (*pb.DecodeResponse, error) {
-	resp := &pb.DecodeResponse{
-		Response: -1,
-	}
-	for !s.checkSuperPermission(in.Username) {
-		return resp, errors.New("Permission denied")
-	}
-	if err := s.decodeDump(encodeDumpFile, decodeDumpFile); err != nil {
-		resp.Message = err.Error()
-	} else {
-		resp.Message = "decode success on remote!"
-	}
-	resp.Response = 0
-	return resp, nil
-
 }
 func (s *Server) Dump(ctx context.Context, in *pb.DumpRequest) (*pb.DumpResponse, error) {
 	resp := &pb.DumpResponse{
@@ -329,15 +298,15 @@ func (s *Server) Dump(ctx context.Context, in *pb.DumpRequest) (*pb.DumpResponse
 		return nil, err
 	}
 	resp.Response = 0
-	resp.Message = fmt.Sprintf("dump %s", encodeDumpFile, " success on server")
+	resp.Message = fmt.Sprintf("dump %s", defauleDumpFile, " success on server")
 	return resp, nil
 }
 func (s *Server) Load(ctx context.Context, in *pb.UpdateRequest) (*pb.UpdateResponse, error) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	var err error
-
-	if !s.checkAccessPermission(in.AuthorityUser) {
+	b, _ := s.checkAccessPermission(in.AuthorityUser)
+	if !b {
 		return nil, errors.New("Permission denied")
 	}
 	nodes := utils.NewUpdateRequest(in)
@@ -356,7 +325,6 @@ func (s *Server) Load(ctx context.Context, in *pb.UpdateRequest) (*pb.UpdateResp
 			Addrs:     make(map[string]uint8),
 			GroupMeta: make(map[string]uint8),
 		}
-
 	}
 	groupRef := make(map[string]string)
 	count := uint64(0)
@@ -482,15 +450,19 @@ func (s *Server) Delete(ctx context.Context, in *pb.DeleteRequest) (*pb.DeleteRe
 }
 
 func (s *Server) Access(ctx context.Context, in *pb.BasicRequest) (*pb.BasicResponse, error) {
-	if !s.checkAccessPermission(in.Username) {
+	b, utype := s.checkAccessPermission(in.Username)
+	if !b {
 		return nil, errors.New("Permission denied")
 	}
-	return &pb.BasicResponse{}, nil
+	return &pb.BasicResponse{
+		Response: int32(utype),
+	}, nil
 
 }
 
 func (s *Server) Cache(ctx context.Context, in *pb.CacheRequest) (*pb.CacheResponse, error) {
-	if !s.checkAccessPermission(in.Username) {
+	b, _ := s.checkAccessPermission(in.Username)
+	if !b {
 		return nil, errors.New("Permission denied")
 	}
 	resp := &pb.CacheResponse{
@@ -503,7 +475,8 @@ func (s *Server) Cache(ctx context.Context, in *pb.CacheRequest) (*pb.CacheRespo
 }
 
 func (s *Server) Query(ctx context.Context, in *pb.QueryRequest) (*pb.QueryResponse, error) {
-	if !s.checkAccessPermission(in.Username) {
+	b, _ := s.checkAccessPermission(in.Username)
+	if !b {
 		return nil, errors.New("Permission denied")
 	}
 	groupInfo := meta.FetchGroup()
@@ -534,14 +507,12 @@ func (s *Server) Query(ctx context.Context, in *pb.QueryRequest) (*pb.QueryRespo
 			return nil, errors.New("empty group")
 		}
 		for _, ip := range hosts {
-
 			currentHosts[ip] = uint8(1)
 		}
 
 	}
 	accessHosts := make([]string, 0)
 	if s.checkSuperPermission(in.Username) {
-
 		for ip, _ := range currentHosts {
 			accessHosts = append(accessHosts, ip)
 		}
@@ -627,9 +598,9 @@ func (s *Server) internalDump() error {
 	for _, node := range c.Nodes {
 		fetchData[node.Ip] = node
 	}
-	if _, err := os.Stat(encodeDumpFile); os.IsNotExist(err) {
-		log.Info(encodeDumpFile, " not exists")
-		if _, err = os.Create(encodeDumpFile); err != nil {
+	if _, err := os.Stat(defauleDumpFile); os.IsNotExist(err) {
+		log.Info(defauleDumpFile, " not exists")
+		if _, err = os.Create(defauleDumpFile); err != nil {
 			return err
 		}
 		initFlag = true
@@ -643,15 +614,11 @@ func (s *Server) internalDump() error {
 			atomic.AddUint64(&count, 1)
 		}
 	} else {
-		b, err := ioutil.ReadFile(encodeDumpFile)
+		b, err := ioutil.ReadFile(defauleDumpFile)
 		if err != nil {
 			return err
 		}
-		eb, err := encode.Decoding(b)
-		if err != nil {
-			return err
-		}
-		if err = json.Unmarshal(eb, newCluster); err != nil {
+		if err = json.Unmarshal(b, newCluster); err != nil {
 			return err
 		}
 		for _, node := range newCluster.Nodes {
@@ -674,12 +641,12 @@ func (s *Server) internalDump() error {
 			}
 			return false
 		})
-		tempFilePath := fmt.Sprintf("%s.temp", encodeDumpFile)
+		tempFilePath := fmt.Sprintf("%s.temp", defauleDumpFile)
 
 		if err = newCluster.Dump(tempFilePath); err != nil {
 			return err
 		}
-		if err = os.Rename(tempFilePath, encodeDumpFile); err != nil {
+		if err = os.Rename(tempFilePath, defauleDumpFile); err != nil {
 			return err
 		}
 		log.Info("dump success append nodes:", count)

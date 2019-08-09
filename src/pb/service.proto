@@ -42,7 +42,6 @@ message  UpdateResponse {
 }
 message CacheRequest {
     string username = 1;
-    int32  flag =2;
 }
 message CacheResponse {
     int32 response =1;
@@ -54,13 +53,6 @@ message QueryRequest{
 message QueryResponse {
     map<string,int32> group_metas=1;  //key is group,value is node size
     repeated NodeMeta node_metas=2;
-}
-message DecodeRequest {
-    string username = 1;
-}
-message DecodeResponse {
-    int32  response=1;
-    string message=2;
 }
 message DumpRequest {
     string username = 1;
@@ -79,13 +71,12 @@ message UserRequest {
     string username=1;
 }
 message UserResponse {
-    map<string,bool> response=1;
+    map<string,int32> response=1;
 }
 service  ServerNodeService {
     rpc Load(UpdateRequest)  returns (UpdateResponse) {};
     rpc Query(QueryRequest)  returns (QueryResponse) {};
     rpc Delete(DeleteRequest)  returns (DeleteResponse) {};
-    rpc Decode(DecodeRequest)  returns (DecodeResponse) {};
     rpc Dump(DumpRequest)  returns (DumpResponse) {};
     rpc Cache(CacheRequest) returns (CacheResponse){};
     rpc Access(BasicRequest) returns (BasicResponse) {};

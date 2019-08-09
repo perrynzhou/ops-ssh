@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"encode"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -137,11 +136,7 @@ func (c *Cluster) Dump(newPath string) error {
 	if err != nil {
 		return err
 	}
-	rb, err := encode.Encoding(b)
-	if err != nil {
-		return err
-	}
-	if err = ioutil.WriteFile(newPath, rb, os.ModePerm); err != nil {
+	if err = ioutil.WriteFile(newPath, b, os.ModePerm); err != nil {
 		return err
 	}
 	return nil

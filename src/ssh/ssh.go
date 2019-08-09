@@ -43,6 +43,31 @@ func NewSSHConnection(node *meta.Node) error {
 	return nil
 }
 
+func Run(node *meta.Node, cmd string) ([]byte, error) {
+	sshConfig := &ssh.ClientConfig{
+		User: node.UserName,
+		Auth: []ssh.AuthMethod{
+			ssh.Password(node.Password),
+		},
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+	}
+	addrInfo := fmt.Sprintf("%s:%d", node.Ip, node.Port)
+	client, err := ssh.Dial("tcp", addrInfo, sshConfig)
+	if err != nil {
+		return nil, err
+	}
+	defer client.Close()
+	session, err := client.NewSession()
+	if err != nil {
+		return nil, err
+	}
+	defer session.Close()
+	combo, err := session.CombinedOutput(cmd)
+	if err != nil {
+		return nil, err
+	}
+	return combo, nil
+}
 func (t *SSHTerminal) updateTerminalSize() {
 
 	go func() {

@@ -115,15 +115,33 @@ func (c *Cache) Flush(path string) error {
 }
 func (c *Cache) OrderNode() []*meta.Node {
 	nodes := make([]*meta.Node, 0)
-	for _, node := range c.NodeCache {
-		nodes = append(nodes, node)
+	refNodes  := make(map[string][]*meta.Node)
+	refKeys := make([]string,0)
+	for _,node := range c.NodeCache {
+		if refNodes[node.GroupName] == nil {
+			refNodes[node.GroupName] = make([]*meta.Node,0)
+			refKeys = append(refKeys,node.GroupName)
+		}
+		refNodes[node.GroupName] = append(refNodes[node.GroupName],node)
 	}
-	sort.Slice(nodes, func(i, j int) bool {
-		if strings.Compare(nodes[i].GroupName, nodes[j].GroupName) < 0 {
+	sort.Slice(refKeys, func(i, j int) bool {
+		if strings.Compare(refKeys[i], refKeys[j]) < 0 {
 			return true
 		}
 		return false
 	})
+    for _,key := range  refKeys {
+    	rnodes := refNodes[key]
+		sort.Slice(rnodes, func(i, j int) bool {
+			if strings.Compare(rnodes[i].Ip, rnodes[j].Ip) < 0 {
+				return true
+			}
+			return false
+		})
+		for _,node := range rnodes {
+			nodes = append(nodes,node)
+		}
+	}
 	return nodes
 }
 func (c *Cache) OrderGroup() []string {

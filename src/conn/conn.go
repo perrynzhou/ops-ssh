@@ -49,19 +49,6 @@ func (a *Conn) NewUpdateSession(configPath string) (*pb.UpdateResponse, error) {
 	}
 	return resp, nil
 }
-func (a *Conn) NewDecodeSession() (*pb.DecodeResponse, error) {
-	username, err := utils.GetUserName()
-	if err != nil {
-		return nil, err
-	}
-	c := pb.NewServerNodeServiceClient(a.connection)
-
-	req := &pb.DecodeRequest{
-		Username: username,
-	}
-
-	return c.Decode(context.Background(), req)
-}
 func (a *Conn) NewDumpSession() (*pb.DumpResponse, error) {
 	username, err := utils.GetUserName()
 	if err != nil {
@@ -75,6 +62,7 @@ func (a *Conn) NewDumpSession() (*pb.DumpResponse, error) {
 
 	return c.Dump(context.Background(), req)
 }
+
 func (a *Conn) NewUserSession() (*pb.UserResponse, error) {
 	username, err := utils.GetUserName()
 	if err != nil {
